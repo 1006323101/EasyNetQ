@@ -205,11 +205,14 @@ namespace EasyNetQ
                     await advancedBus.BindAsync(exchange, queue, queue.Name, cancellationToken).ConfigureAwait(false);
                 }
 
-                var subscription = advancedBus.Consume<TResponse>(queue, (message, messageReceivedInfo) =>
-                {
-                    if (responseActions.TryRemove(message.Properties.CorrelationId, out var responseAction))
-                        responseAction.OnSuccess(message);
-                });
+                var subscription = advancedBus.Consume<TResponse>(
+                    queue,
+                    (message, receivedInfo) =>
+                    {
+                        if (responseActions.TryRemove(message.Properties.CorrelationId, out var responseAction))
+                            responseAction.OnSuccess(message);
+                    }
+                );
 
                 responseSubscriptions.TryAdd(rpcKey, new ResponseSubscription(queue.Name, subscription));
                 return queue.Name;
@@ -283,7 +286,7 @@ namespace EasyNetQ
 
             return advancedBus.Consume<TRequest>(
                 queue,
-                (m, i, c) => RespondToMessageAsync(responder, m, c),
+                (message, _, cancellation) => RespondToMessageAsync(responder, message, cancellation),
                 c => c.WithPrefetchCount(responderConfiguration.PrefetchCount)
             );
         }
@@ -344,7 +347,7 @@ namespace EasyNetQ
             }
         }
 
-        protected struct RpcKey
+        protected readonly struct RpcKey
         {
             public RpcKey(Type requestType, Type responseType)
             {
@@ -356,7 +359,7 @@ namespace EasyNetQ
             public Type ResponseType { get; }
         }
 
-        protected struct ResponseAction
+        protected readonly struct ResponseAction
         {
             public ResponseAction(Action<object> onSuccess, Action onFailure)
             {
@@ -368,7 +371,7 @@ namespace EasyNetQ
             public Action OnFailure { get; }
         }
 
-        protected struct ResponseSubscription
+        protected readonly struct ResponseSubscription
         {
             public ResponseSubscription(string queueName, IDisposable subscription)
             {
